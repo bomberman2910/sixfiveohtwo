@@ -56,7 +56,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    const cpu = processor.Cpu.init(gpa);
+    var cpu = processor.Cpu.init(allocator);
     defer cpu.deinit();
 
     while (!quit) {
@@ -82,23 +82,6 @@ pub fn main() !void {
             defer allocator.free(numbering);
             i = 0;
             while (i < 4) : (i += 1) {
-                // switch (numbering[i]) {
-                //     '0' => try drawCharacterToFramebuffer(&character_set[NUMBER_INDEX_START], &framebuffer, x + (8 * i), y),
-                //     '1' => try drawCharacterToFramebuffer(&character_set[NUMBER_INDEX_START + 1], &framebuffer, x + (8 * i), y),
-                //     '2' => try drawCharacterToFramebuffer(&character_set[NUMBER_INDEX_START + 2], &framebuffer, x + (8 * i), y),
-                //     '3' => try drawCharacterToFramebuffer(&character_set[NUMBER_INDEX_START + 3], &framebuffer, x + (8 * i), y),
-                //     '4' => try drawCharacterToFramebuffer(&character_set[NUMBER_INDEX_START + 4], &framebuffer, x + (8 * i), y),
-                //     '5' => try drawCharacterToFramebuffer(&character_set[NUMBER_INDEX_START + 5], &framebuffer, x + (8 * i), y),
-                //     '6' => try drawCharacterToFramebuffer(&character_set[NUMBER_INDEX_START + 6], &framebuffer, x + (8 * i), y),
-                //     '7' => try drawCharacterToFramebuffer(&character_set[NUMBER_INDEX_START + 7], &framebuffer, x + (8 * i), y),
-                //     '8' => try drawCharacterToFramebuffer(&character_set[NUMBER_INDEX_START + 8], &framebuffer, x + (8 * i), y),
-                //     '9' => try drawCharacterToFramebuffer(&character_set[NUMBER_INDEX_START + 9], &framebuffer, x + (8 * i), y),
-                //     ':' => try drawCharacterToFramebuffer(&character_set[COLON_INDEX], &framebuffer, x + (8 * i), y),
-                //     else => drawCharacterToFramebuffer(&character_set[SPACE_INDEX], &framebuffer, x + (8 * i), y) catch |err| {
-                //         std.debug.print("{0}: {1},", .{ err, current_char });
-                //         std.debug.print("{0},{1}\n", .{ x, y });
-                //     },
-                // }
                 try drawCharacterToFramebuffer(&character_set[numbering[i]], &framebuffer, x + (8 * i), y);
             }
             try drawCharacterToFramebuffer(&character_set[current_char], &framebuffer, x + 32, y);
