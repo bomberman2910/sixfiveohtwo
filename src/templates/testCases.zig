@@ -103,7 +103,7 @@ fn testCaseSet(test_cases: []const TestCase) !bool {
                 initial_memory: {
                     if (failed_test.expected_result.before.memory.len == 0)
                         break :initial_memory "";
-                    var buffer = [_]u8{0} ** 100;
+                    var buffer = [_]u8{0} ** 120;
                     var stream = std.io.fixedBufferStream(&buffer);
                     var writer = stream.writer();
                     try writer.print("{{ ", .{});
@@ -124,7 +124,7 @@ fn testCaseSet(test_cases: []const TestCase) !bool {
                 actual_memory: {
                     if (failed_test.actual_memory.len == 0)
                         break :actual_memory "";
-                    var buffer = [_]u8{0} ** 100;
+                    var buffer = [_]u8{0} ** 120;
                     var stream = std.io.fixedBufferStream(&buffer);
                     var writer = stream.writer();
                     try writer.print("{{ ", .{});
@@ -145,7 +145,7 @@ fn testCaseSet(test_cases: []const TestCase) !bool {
                 expected_memory: {
                     if (failed_test.expected_result.after.memory.len == 0)
                         break :expected_memory "";
-                    var buffer = [_]u8{0} ** 100;
+                    var buffer = [_]u8{0} ** 120;
                     var stream = std.io.fixedBufferStream(&buffer);
                     var writer = stream.writer();
                     try writer.print("{{ ", .{});

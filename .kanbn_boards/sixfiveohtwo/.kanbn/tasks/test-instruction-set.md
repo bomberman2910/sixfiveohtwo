@@ -1,6 +1,6 @@
 ---
 created: 2024-04-22T19:29:20.716Z
-updated: 2024-07-19T20:59:24.632Z
+updated: 2024-07-21T16:36:49.134Z
 assigned: ""
 progress: 0
 tags:
@@ -8,6 +8,7 @@ tags:
   - Core
   - Test
 started: 2024-06-28T00:00:00.000Z
+completed: 2024-07-21T16:36:49.134Z
 ---
 
 # Test instruction set
@@ -19,13 +20,13 @@ started: 2024-06-28T00:00:00.000Z
 - [x] Decrements & Increments
 - [x] Arithmetic
 - [x] Logical
-- [ ] Shift & Rotate
-- [ ] Flag
-- [ ] Comparisons
-- [ ] Conditional Branching
-- [ ] Jumps & Subroutines
-- [ ] Interrupts
-- [ ] Other
+- [x] Shift & Rotate
+- [x] Flag
+- [x] Comparisons
+- [x] Conditional Branching
+- [x] Jumps & Subroutines
+- [x] Interrupts
+- [x] Other
 
 ## Comments
 
