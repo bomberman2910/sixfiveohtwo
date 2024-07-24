@@ -31,7 +31,7 @@ pub const Cpu = struct {
 
     pub fn reset(self: *Cpu) !void {
         self.state = .{};
-        const start_address = self.readAddressFromProgramCounter();
+        const start_address = try self.readAddressFromProgramCounter();
         self.state.pc = start_address;
     }
 
@@ -49,6 +49,7 @@ pub const Cpu = struct {
 
     pub fn clock(self: *Cpu) !void {
         const instruction = try self.readNextByte();
+        // std.debug.print("executing instruction: {X:0>2}\n", .{instruction});
         const decoded: DecodedInstruction = @bitCast(instruction);
 
         const source: OperandSource = switch (decoded.b) {
