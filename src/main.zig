@@ -303,7 +303,7 @@ pub fn main() !void {
 
         try showProcessorState(&cpu, &framebuffer);
         try showTerminalScreen(&framebuffer);
-        try showCharSet(&framebuffer);
+        // try showCharSet(&framebuffer);
 
         _ = sdl.SDL_UpdateTexture(texture, null, &framebuffer, WINDOW_WIDTH * @sizeOf(u32));
         _ = sdl.SDL_RenderClear(renderer);
@@ -368,9 +368,9 @@ fn showTerminalScreen(framebuffer: *[WINDOW_WIDTH * WINDOW_HEIGHT]u32) !void {
     var i: usize = 0;
     while (i < 960) : (i += 1) {
         if (cursor_state and i == terminal_screen.cursor_position) {
-            try drawCharacterToFramebuffer(&character_set[1], framebuffer, x * 8, y * 8);
+            try drawCharacterToFramebuffer(&character_set[1], framebuffer, x * 8, y * 16);
         } else {
-            try drawCharacterToFramebuffer(&character_set[terminal_screen.buffer[i] % 128], framebuffer, x * 8, y * 8);
+            try drawCharacterToFramebuffer(&character_set[terminal_screen.buffer[i] % 128], framebuffer, x * 8, y * 16);
         }
         x += 1;
         if (x == 40) {
@@ -391,7 +391,7 @@ fn showProcessorState(cpu: *processor.Cpu, framebuffer: *[WINDOW_WIDTH * WINDOW_
     var processor_state_stream = std.io.fixedBufferStream(&processor_state_buffer);
     var writer = processor_state_stream.writer();
     try writer.print("{X:0>4} {X:0>2} {X:0>2} {X:0>2} {X:0>2} {b:0>8}  {X:0>2} {X:0>2} {X:0>2} {s}", .{ cpu.state.pc, cpu.state.ac, cpu.state.xr, cpu.state.yr, cpu.state.sp, @as(u8, @bitCast(cpu.state.sr)), current_instruction_bytes[0], current_instruction_bytes[1], current_instruction_bytes[2], current_instruction });
-    try drawStringToFramebuffer(&processor_state_buffer, framebuffer, 0, 8);
+    try drawStringToFramebuffer(&processor_state_buffer, framebuffer, 0, 16);
 }
 
 fn showCharSet(framebuffer: *[WINDOW_WIDTH * WINDOW_HEIGHT]u32) !void {
@@ -431,15 +431,16 @@ fn explodeU8(input: u8) []u32 {
 }
 
 fn drawCharacterToFramebuffer(character: *[8]u8, framebuffer: *[WINDOW_WIDTH * WINDOW_HEIGHT]u32, x: u32, y: u32) ArgumentError!void {
-    if ((x + 8 > WINDOW_WIDTH) or (y + 8 > WINDOW_HEIGHT))
+    if ((x + 16 > WINDOW_WIDTH) or (y + 16 > WINDOW_HEIGHT))
         return ArgumentError.OutOfRange;
 
     var i: u8 = 0;
-    while (i < 8) : (i += 1) {
-        const exploded = explodeU8(character[i]);
+    while (i < 16) : (i += 2) {
+        const exploded = explodeU8(character[i / 2]);
         var char_x: u8 = 0;
         while (char_x < 8) : (char_x += 1) {
             framebuffer[(y + i) * WINDOW_WIDTH + x + char_x] = exploded[char_x];
+            framebuffer[(y + i + 1) * WINDOW_WIDTH + x + char_x] = exploded[char_x];
         }
     }
 }
