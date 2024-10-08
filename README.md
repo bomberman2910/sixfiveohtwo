@@ -5,7 +5,7 @@ What started as a simple little project to learn Zig has turned into a trip to n
 ## Known issues
 
 - I've used the 6502 tests by Tom Harte ([link to repo](https://github.com/SingleStepTests/ProcessorTests/tree/main/6502)) and it's failing between 100 and 200 tests for every SBC instruction. Considering that's about 1% of the tests per instruction I didn't bother to fix that yet.
-- It's also not cycle or even speed accurate at all at the moment and I'm not sure I want to prioritize that right now.
+- --It's also not cycle or even speed accurate at all at the moment and I'm not sure I want to prioritize that right now.-- (can be considered partially fixed for now)
 - Also this code isn't really cleaned at all. It's the first working state and can definitely use improvement in a lot of places.
 
 ## Nice to know
@@ -17,7 +17,7 @@ What started as a simple little project to learn Zig has turned into a trip to n
 
 On start it automatically loads Wozmon and Apple BASIC to memory locations 0xFF00 and 0xE000 respectively. Both memory sections are write protected by default, causing an error when writing to them is attempted.
 
-Technically there is a emulated PIA at 0xD010 and while ih helps with the emulator you should not rely on it working the way the original does at all.
+Technically there is a emulated PIA at 0xD010 and while it helps with the emulator you should not rely on it working the way the original does at all.
 
 For RAM there's a section from 0x0000 to 0x3FFF. That covers the zeropage and stack as well as the default locations BASIC uses to store data and should also be more than enough for the rest you could ever run on this thing.
 
