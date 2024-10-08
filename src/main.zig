@@ -305,6 +305,12 @@ pub fn main() !void {
         try showTerminalScreen(&framebuffer);
         // try showCharSet(&framebuffer);
 
+        var current_cycles_buffer = [_]u8{0} ** 20;
+        var current_cycles_stream = std.io.fixedBufferStream(&current_cycles_buffer);
+        var writer = current_cycles_stream.writer();
+        try writer.print("{d}", .{cpu.total_cycles});
+        sdl.SDL_SetWindowTitle(window, &current_cycles_buffer);
+
         _ = sdl.SDL_UpdateTexture(texture, null, &framebuffer, WINDOW_WIDTH * @sizeOf(u32));
         _ = sdl.SDL_RenderClear(renderer);
         _ = sdl.SDL_RenderCopy(renderer, texture, null, null);
@@ -312,7 +318,7 @@ pub fn main() !void {
 
         if (cursor_frame_count % 1 == 0 and is_cpu_running) {
             var cycles: usize = 0;
-            while (cycles < 1700) : (cycles += 1) {
+            while (cycles < 16666) : (cycles += 1) {
                 try cpu.clock();
             }
         }
