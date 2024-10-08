@@ -5,7 +5,7 @@ What started as a simple little project to learn Zig has turned into a trip to n
 ## Known issues
 
 - I've used the 6502 tests by Tom Harte ([link to repo](https://github.com/SingleStepTests/ProcessorTests/tree/main/6502)) and it's failing between 100 and 200 tests for every SBC instruction. Considering that's about 1% of the tests per instruction I didn't bother to fix that yet.
-- --It's also not cycle or even speed accurate at all at the moment and I'm not sure I want to prioritize that right now.-- (can be considered partially fixed for now)
+- ~~It's also not cycle or even speed accurate at all at the moment and I'm not sure I want to prioritize that right now.~~ (can be considered partially fixed for now)
 - Also this code isn't really cleaned at all. It's the first working state and can definitely use improvement in a lot of places.
 
 ## Nice to know
