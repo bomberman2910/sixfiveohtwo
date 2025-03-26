@@ -29,20 +29,22 @@ pub fn build(b: *std.Build) void {
     // running `zig build`).
     // b.installArtifact(lib);
 
+    const raylib_dep = b.dependency("raylib_zig", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const raylib = raylib_dep.module("raylib"); // main raylib module
+    const raylib_artifact = raylib_dep.artifact("raylib"); // raylib C library
+
     const exe = b.addExecutable(.{
         .name = "sixfiveohtwo",
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
-    if (target.result.isGnuLibC()) {
-        // The SDL package doesn't work for Linux yet, so we rely on system
-        // packages for now.
-        exe.linkSystemLibrary("SDL2");
-        exe.linkLibC();
-    } else {
-        @panic("Building on other systems than Linux is currently no supported");
-    }
+    exe.linkLibrary(raylib_artifact);
+    exe.root_module.addImport("raylib", raylib);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default

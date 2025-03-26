@@ -1,17 +1,15 @@
-const sdl = @cImport({
-    @cInclude("SDL2/SDL.h");
-});
 const std = @import("std");
 const processor = @import("./cpu.zig");
 const disassembler = @import("./disassembler.zig");
 const terminal = @import("./terminal.zig");
 const busdevice = @import("./busdevice.zig");
+const raylib = @import("raylib");
 
 const stream = std.io.fixedBufferStream;
 
 const WINDOW_WIDTH = 640;
 const WINDOW_HEIGHT = 480;
-const FRAME_TICKS = 17;
+const FRAME_TICKS: comptime_float = 17 / 1000;
 
 const NUMBER_INDEX_START = 48;
 const COLON_INDEX = 58;
@@ -30,33 +28,13 @@ pub fn main() !void {
         character_set[i] = character;
     }
 
-    if (sdl.SDL_Init(sdl.SDL_INIT_VIDEO) != 0) {
-        sdl.SDL_Log("Unable to initialize SDL: %s", sdl.SDL_GetError());
-        return error.SDLInitializationFailed;
-    }
-    defer sdl.SDL_Quit();
-
-    const window = sdl.SDL_CreateWindow("", sdl.SDL_WINDOWPOS_UNDEFINED, sdl.SDL_WINDOWPOS_UNDEFINED, WINDOW_WIDTH, WINDOW_HEIGHT, sdl.SDL_WINDOW_OPENGL) orelse {
-        sdl.SDL_Log("Unable to create window: %s", sdl.SDL_GetError());
-        return error.SDLInitializationFailed;
-    };
-    defer sdl.SDL_DestroyWindow(window);
-
-    const renderer = sdl.SDL_CreateRenderer(window, -1, 0) orelse {
-        sdl.SDL_Log("Unable to create renderer: %s", sdl.SDL_GetError());
-        return error.SDLInitializationFailed;
-    };
-    defer sdl.SDL_DestroyRenderer(renderer);
-
-    const texture = sdl.SDL_CreateTexture(renderer, sdl.SDL_PIXELFORMAT_RGBA8888, sdl.SDL_TEXTUREACCESS_STATIC, WINDOW_WIDTH, WINDOW_HEIGHT) orelse {
-        sdl.SDL_Log("Unable to create texture: %s", sdl.SDL_GetError());
-        return error.SDLInitializationFailed;
-    };
-    defer sdl.SDL_DestroyTexture(texture);
+    raylib.initWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "sixfiveohtwo");
+    defer raylib.closeWindow();
+    raylib.setTargetFPS(60);
+    raylib.setExitKey(raylib.KeyboardKey.null);
 
     var framebuffer = [_]u32{255} ** (WINDOW_WIDTH * WINDOW_HEIGHT);
-    var next_frame = sdl.SDL_GetTicks() + FRAME_TICKS;
-    var quit = false;
+    var next_frame = raylib.getTime() + FRAME_TICKS;
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
@@ -79,224 +57,218 @@ pub fn main() !void {
     var is_key_press_handled = false;
     var is_cpu_running = false;
 
-    while (!quit) {
-        var event: sdl.SDL_Event = undefined;
-        while (sdl.SDL_PollEvent(&event) != 0) {
-            switch (event.type) {
-                sdl.SDL_QUIT => {
-                    quit = true;
-                },
-                sdl.SDL_KEYDOWN => {
-                    keyboard_state[@intCast(event.key.keysym.scancode)] = true;
-                },
-                sdl.SDL_KEYUP => {
-                    keyboard_state[@intCast(event.key.keysym.scancode)] = false;
-                    is_key_press_handled = false;
-                },
-
-                else => {},
-            }
+    while (!raylib.windowShouldClose()) {
+        // TODO the entire input system is fucked
+        var pressed_key = @as(usize, @intFromEnum(raylib.KeyboardKey.null));
+        var key_index: u16 = 0;
+        while (key_index < 512) : (key_index += 1) {
+            keyboard_state[pressed_key] = false;
         }
+        while (pressed_key != @as(usize, @intFromEnum(raylib.KeyboardKey.null))) {
+            keyboard_state[pressed_key] = true;
+            pressed_key = @as(usize, @intCast(@intFromEnum(raylib.getKeyPressed())));
+        }
+        is_key_press_handled = false;
 
         const is_monitor_ready_for_input = try cpu.bus.read(0xD011) & 0x80 != 0x80;
 
         if (!is_key_press_handled) {
             // emulator control
-            if (keyboard_state[sdl.SDL_SCANCODE_F5]) {
+            if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.f5))]) {
                 try cpu.reset();
                 is_key_press_handled = true;
-            } else if (keyboard_state[sdl.SDL_SCANCODE_F10]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.f10))]) {
                 if (!is_cpu_running)
                     try cpu.clock();
                 is_key_press_handled = true;
-            } else if (keyboard_state[sdl.SDL_SCANCODE_F11]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.f11))]) {
                 is_cpu_running = !is_cpu_running;
                 is_key_press_handled = true;
             }
             // hex characters
-            else if (keyboard_state[sdl.SDL_SCANCODE_0] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.zero))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey(')', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('0', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_1] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.one))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('!', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('1', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_2] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.two))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('@', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('2', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_3] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.three))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('#', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('3', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_4] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.four))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('$', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('4', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_5] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.five))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('%', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('5', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_6] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.six))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('^', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('6', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_7] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.seven))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('&', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('7', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_8] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.eight))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('*', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('8', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_9] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.nine))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('(', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('9', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_A] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.a))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('A', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_B] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.b))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('B', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_C] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.c))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('C', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_D] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.d))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('D', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_E] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.e))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('E', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_F] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.f))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('F', &cpu);
             }
             // remaining letters
-            else if (keyboard_state[sdl.SDL_SCANCODE_G] and is_monitor_ready_for_input) {
+            else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.g))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('G', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_H] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.h))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('H', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_I] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.i))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('I', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_J] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.j))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('J', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_K] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.k))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('K', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_L] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.l))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('L', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_M] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.m))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('M', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_N] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.n))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('N', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_O] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.o))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('O', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_P] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.p))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('P', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_Q] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.q))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('Q', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_R] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.r))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('R', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_S] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.s))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('S', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_T] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.t))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('T', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_U] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.u))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('U', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_V] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.v))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('V', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_W] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.w))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('W', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_X] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.x))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('X', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_Y] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.y))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('Y', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_Z] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.z))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('Z', &cpu);
             }
             // control keys and special characters
-            else if (keyboard_state[sdl.SDL_SCANCODE_BACKSPACE] and is_monitor_ready_for_input) {
+            else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.backspace))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey('_', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_EQUALS] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.equal))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('+', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('=', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_MINUS] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.minus))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('_', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('-', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_SLASH] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.slash))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('?', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('/', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_COMMA] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.comma))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('<', &cpu);
                 } else {
                     is_key_press_handled = try pressKey(',', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_SPACE] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.space))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey(' ', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_PERIOD] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.period))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('>', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('.', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_SEMICOLON] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.semicolon))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey(':', &cpu);
                 } else {
                     is_key_press_handled = try pressKey(';', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_APOSTROPHE] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.apostrophe))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('"', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('\'', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_LEFTBRACKET] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_bracket))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('{', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('[', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_RIGHTBRACKET] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_bracket))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('}', &cpu);
                 } else {
                     is_key_press_handled = try pressKey(']', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_BACKSLASH] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.backslash))] and is_monitor_ready_for_input) {
+                if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.left_shift))] or keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.right_shift))]) {
                     is_key_press_handled = try pressKey('|', &cpu);
                 } else {
                     is_key_press_handled = try pressKey('\\', &cpu);
                 }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_RETURN] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.enter))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey(0x0D, &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_ESCAPE] and is_monitor_ready_for_input) {
+            } else if (keyboard_state[@as(usize, @intFromEnum(raylib.KeyboardKey.escape))] and is_monitor_ready_for_input) {
                 is_key_press_handled = try pressKey(0x1B, &cpu);
             }
         }
@@ -309,12 +281,15 @@ pub fn main() !void {
         var current_cycles_stream = std.io.fixedBufferStream(&current_cycles_buffer);
         var writer = current_cycles_stream.writer();
         try writer.print("{d}", .{cpu.total_cycles});
-        sdl.SDL_SetWindowTitle(window, &current_cycles_buffer);
 
-        _ = sdl.SDL_UpdateTexture(texture, null, &framebuffer, WINDOW_WIDTH * @sizeOf(u32));
-        _ = sdl.SDL_RenderClear(renderer);
-        _ = sdl.SDL_RenderCopy(renderer, texture, null, null);
-        sdl.SDL_RenderPresent(renderer);
+        raylib.beginDrawing();
+        defer raylib.endDrawing();
+
+        const image = raylib.Image{ .data = &framebuffer, .width = WINDOW_WIDTH, .height = WINDOW_HEIGHT, .format = raylib.PixelFormat.uncompressed_r8g8b8a8, .mipmaps = 1 };
+        const texture = try raylib.loadTextureFromImage(image);
+        defer texture.unload();
+        raylib.clearBackground(raylib.Color.black);
+        raylib.drawTexture(texture, 0, 0, raylib.Color.white);
 
         if (cursor_frame_count % 1 == 0 and is_cpu_running) {
             var cycles: usize = 0;
@@ -323,11 +298,11 @@ pub fn main() !void {
             }
         }
 
-        const now = sdl.SDL_GetTicks();
+        const now = raylib.getTime();
         if (next_frame <= now) {
-            sdl.SDL_Delay(0);
+            raylib.waitTime(0);
         } else {
-            sdl.SDL_Delay(next_frame - now);
+            raylib.waitTime(next_frame - now);
         }
 
         next_frame += FRAME_TICKS;
