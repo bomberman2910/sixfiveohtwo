@@ -38,6 +38,13 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
+    const possibleKeys = std.enums.values(raylib.KeyboardKey);
+    var possibleKeysMap = std.AutoHashMap(usize, raylib.KeyboardKey).init(allocator);
+    defer possibleKeysMap.deinit();
+    for (possibleKeys) |key| {
+        try possibleKeysMap.put(@as(usize, @intCast(@intFromEnum(key))), key);
+    }
+
     var keyboard_state: [512]bool = [_]bool{false} ** 512;
 
     var cpu = processor.Cpu.init(allocator);
@@ -54,21 +61,23 @@ pub fn main() !void {
     try cpu.bus.addDevice(0xE000, 0x1000, null, true);
     try cpu.bus.writeToDevice(0xE000, @embedFile("basic.rom"));
 
-    var is_key_press_handled = false;
+    var is_key_press_handled = true;
     var is_cpu_running = false;
 
     while (!raylib.windowShouldClose()) {
-        // TODO the entire input system is fucked
-        var pressed_key = @as(usize, @intFromEnum(raylib.KeyboardKey.null));
-        var key_index: u16 = 0;
+        // TODO inputs work now, but there's no "debounce"
+        var key_index: u32 = 0;
         while (key_index < 512) : (key_index += 1) {
-            keyboard_state[pressed_key] = false;
+            if (!possibleKeysMap.contains(key_index)) {
+                continue;
+            }
+            const key = @as(raylib.KeyboardKey, @enumFromInt(key_index));
+            const is_key_pressed = raylib.isKeyDown(key);
+            keyboard_state[key_index] = is_key_pressed;
+            if (is_key_pressed and key != raylib.KeyboardKey.left_shift and key != raylib.KeyboardKey.right_shift) {
+                is_key_press_handled = false;
+            }
         }
-        while (pressed_key != @as(usize, @intFromEnum(raylib.KeyboardKey.null))) {
-            keyboard_state[pressed_key] = true;
-            pressed_key = @as(usize, @intCast(@intFromEnum(raylib.getKeyPressed())));
-        }
-        is_key_press_handled = false;
 
         const is_monitor_ready_for_input = try cpu.bus.read(0xD011) & 0x80 != 0x80;
 
@@ -285,11 +294,15 @@ pub fn main() !void {
         raylib.beginDrawing();
         defer raylib.endDrawing();
 
-        const image = raylib.Image{ .data = &framebuffer, .width = WINDOW_WIDTH, .height = WINDOW_HEIGHT, .format = raylib.PixelFormat.uncompressed_r8g8b8a8, .mipmaps = 1 };
-        const texture = try raylib.loadTextureFromImage(image);
-        defer texture.unload();
         raylib.clearBackground(raylib.Color.black);
-        raylib.drawTexture(texture, 0, 0, raylib.Color.white);
+        var x: i32 = 0;
+        var y: i32 = 0;
+        while (y < WINDOW_HEIGHT) : (y += 1) {
+            while (x < WINDOW_WIDTH) : (x += 1) {
+                raylib.drawRectangle(x, y, 1, 1, raylib.Color.fromInt(framebuffer[@intCast(y * WINDOW_WIDTH + x)]));
+            }
+            x = 0;
+        }
 
         if (cursor_frame_count % 1 == 0 and is_cpu_running) {
             var cycles: usize = 0;
