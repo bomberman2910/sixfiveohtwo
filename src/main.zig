@@ -6,11 +6,12 @@ const processor = @import("./cpu.zig");
 const disassembler = @import("./disassembler.zig");
 const terminal = @import("./terminal.zig");
 const busdevice = @import("./busdevice.zig");
+const pixelDisplay = @import("./pixelDisplay.zig");
 
 const stream = std.io.fixedBufferStream;
 
-const WINDOW_WIDTH = 640;
-const WINDOW_HEIGHT = 480;
+const WINDOW_WIDTH = 1280;
+const WINDOW_HEIGHT = 960;
 const FRAME_TICKS = 17;
 
 const NUMBER_INDEX_START = 48;
@@ -19,6 +20,9 @@ const SPACE_INDEX = 32;
 
 var character_set: [128][8]u8 = undefined;
 var terminal_screen = terminal.TerminalScreen.init();
+var pixel_screen = pixelDisplay.PixelScreen.init();
+
+var cursor_frame_count: u8 = 0;
 
 pub fn main() !void {
     const character_rom = @embedFile("charmap.rom");
@@ -29,6 +33,10 @@ pub fn main() !void {
         _ = try character_stream.read(&character);
         character_set[i] = character;
     }
+    @memcpy(pixel_screen.character_set[0..127], character_set[0..127]);
+    @memcpy(pixel_screen.character_set[128..255], character_set[0..127]);
+
+    try pixel_screen.switchToTextMode();
 
     if (sdl.SDL_Init(sdl.SDL_INIT_VIDEO) != 0) {
         sdl.SDL_Log("Unable to initialize SDL: %s", sdl.SDL_GetError());
@@ -48,13 +56,12 @@ pub fn main() !void {
     };
     defer sdl.SDL_DestroyRenderer(renderer);
 
-    const texture = sdl.SDL_CreateTexture(renderer, sdl.SDL_PIXELFORMAT_RGBA8888, sdl.SDL_TEXTUREACCESS_STATIC, WINDOW_WIDTH, WINDOW_HEIGHT) orelse {
+    const texture = sdl.SDL_CreateTexture(renderer, sdl.SDL_PIXELFORMAT_RGB888, sdl.SDL_TEXTUREACCESS_STATIC, WINDOW_WIDTH, WINDOW_HEIGHT) orelse {
         sdl.SDL_Log("Unable to create texture: %s", sdl.SDL_GetError());
         return error.SDLInitializationFailed;
     };
     defer sdl.SDL_DestroyTexture(texture);
 
-    var framebuffer = [_]u32{255} ** (WINDOW_WIDTH * WINDOW_HEIGHT);
     var next_frame = sdl.SDL_GetTicks() + FRAME_TICKS;
     var quit = false;
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -101,9 +108,10 @@ pub fn main() !void {
         const is_monitor_ready_for_input = try cpu.bus.read(0xD011) & 0x80 != 0x80;
         is_key_press_handled = try handleKeyPress(is_key_press_handled, keyboard_state, &cpu, &is_cpu_running, is_monitor_ready_for_input);
 
-        try showProcessorState(&cpu, &framebuffer);
-        try showTerminalScreen(&framebuffer);
-        // try showCharSet(&framebuffer);
+        try showProcessorState(&cpu);
+        showTerminalScreen();
+
+        try pixel_screen.renderTextToFrameBuffer();
 
         var current_cycles_buffer = [_]u8{0} ** 20;
         var current_cycles_stream = std.io.fixedBufferStream(&current_cycles_buffer);
@@ -111,7 +119,20 @@ pub fn main() !void {
         try writer.print("{d}", .{cpu.total_cycles});
         sdl.SDL_SetWindowTitle(window, &current_cycles_buffer);
 
-        _ = sdl.SDL_UpdateTexture(texture, null, &framebuffer, WINDOW_WIDTH * @sizeOf(u32));
+        var zoomed_buffer = [_]u24{0} ** (WINDOW_WIDTH * WINDOW_HEIGHT);
+        var x: usize = 0;
+        var y: usize = 0;
+        while (y < WINDOW_HEIGHT) : (y += 2) {
+            while (x < WINDOW_WIDTH) : (x += 2) {
+                zoomed_buffer[y * WINDOW_WIDTH + x] = pixel_screen.frame_buffer[(y / 2) * (WINDOW_WIDTH / 2) + (x / 2)];
+                zoomed_buffer[y * WINDOW_WIDTH + x + 1] = pixel_screen.frame_buffer[(y / 2) * (WINDOW_WIDTH / 2) + (x / 2)];
+                zoomed_buffer[(y + 1) * WINDOW_WIDTH + x] = pixel_screen.frame_buffer[(y / 2) * (WINDOW_WIDTH / 2) + (x / 2)];
+                zoomed_buffer[(y + 1) * WINDOW_WIDTH + x + 1] = pixel_screen.frame_buffer[(y / 2) * (WINDOW_WIDTH / 2) + (x / 2)];
+            }
+            x = 0;
+        }
+
+        _ = sdl.SDL_UpdateTexture(texture, null, &zoomed_buffer, WINDOW_WIDTH * @sizeOf(u24));
         _ = sdl.SDL_RenderClear(renderer);
         _ = sdl.SDL_RenderCopy(renderer, texture, null, null);
         sdl.SDL_RenderPresent(renderer);
@@ -134,7 +155,7 @@ pub fn main() !void {
         cursor_frame_count += 1;
         if (cursor_frame_count == 30) {
             cursor_frame_count = 0;
-            cursor_state = !cursor_state;
+            terminal_screen.toggleCursor();
         }
     }
 }
@@ -370,98 +391,34 @@ fn pia_clock(self: *busdevice.BusDevice, last_read_address: ?u16) void {
     }
 }
 
-var cursor_state = false;
-var cursor_frame_count: u8 = 0;
-
-fn showTerminalScreen(framebuffer: *[WINDOW_WIDTH * WINDOW_HEIGHT]u32) !void {
-    var x: u32 = 0;
-    var y: u32 = 3;
-    var i: usize = 0;
-    while (i < 960) : (i += 1) {
-        if (cursor_state and i == terminal_screen.cursor_position) {
-            try drawCharacterToFramebuffer(&character_set[1], framebuffer, x * 8, y * 16);
-        } else {
-            try drawCharacterToFramebuffer(&character_set[terminal_screen.buffer[i] % 128], framebuffer, x * 8, y * 16);
-        }
-        x += 1;
-        if (x == 40) {
-            x = 0;
-            y += 1;
-        }
-    }
+fn showTerminalScreen() void {
+    @memcpy(pixel_screen.text_buffer[0..(40 * 24)], terminal_screen.buffer[0..(40 * 24)]);
 }
 
-fn showProcessorState(cpu: *processor.Cpu, framebuffer: *[WINDOW_WIDTH * WINDOW_HEIGHT]u32) !void {
-    const processor_register_titles = " PC  AC XR YR SP NV-BDIZC  Current instruction:";
-    try drawStringToFramebuffer(processor_register_titles, framebuffer, 0, 0);
+fn showProcessorState(cpu: *processor.Cpu) !void {
+    const processor_register_titles = " PC  AC XR YR SP    SR     Instruction:";
+    try drawStringToFramebuffer(processor_register_titles, 0, 0, (255 << 16) + (255 << 8));
 
     var current_instruction_bytes = [_]u8{ cpu.bus.read(cpu.state.pc) catch 0x00, cpu.bus.read(@addWithOverflow(cpu.state.pc, 1)[0]) catch 0x00, cpu.bus.read(@addWithOverflow(cpu.state.pc, 2)[0]) catch 0x00 };
-    const current_instruction = try disassembler.disassemble(&current_instruction_bytes);
 
-    var processor_state_buffer = [_]u8{0} ** 60;
+    var processor_state_buffer = [_]u8{0} ** 40;
     var processor_state_stream = std.io.fixedBufferStream(&processor_state_buffer);
     var writer = processor_state_stream.writer();
-    try writer.print("{X:0>4} {X:0>2} {X:0>2} {X:0>2} {X:0>2} {b:0>8}  {X:0>2} {X:0>2} {X:0>2} {s}", .{ cpu.state.pc, cpu.state.ac, cpu.state.xr, cpu.state.yr, cpu.state.sp, @as(u8, @bitCast(cpu.state.sr)), current_instruction_bytes[0], current_instruction_bytes[1], current_instruction_bytes[2], current_instruction });
-    try drawStringToFramebuffer(&processor_state_buffer, framebuffer, 0, 16);
+    try writer.print("{X:0>4} {X:0>2} {X:0>2} {X:0>2} {X:0>2} {b:0>8}  {X:0>2} {X:0>2} {X:0>2}", .{ cpu.state.pc, cpu.state.ac, cpu.state.xr, cpu.state.yr, cpu.state.sp, @as(u8, @bitCast(cpu.state.sr)), current_instruction_bytes[0], current_instruction_bytes[1], current_instruction_bytes[2] });
+    try drawStringToFramebuffer(&processor_state_buffer, 0, 16, 255 + (255 << 8) + (255 << 16));
+
+    const current_instruction = try disassembler.disassemble(&current_instruction_bytes);
+    var instruction_buffer = [_]u8{0} ** 40;
+    var instruction_buffer_stream = std.io.fixedBufferStream(&instruction_buffer);
+    writer = instruction_buffer_stream.writer();
+    try writer.print("                           {s}", .{current_instruction});
+    try drawStringToFramebuffer(&instruction_buffer, 0, 32, 255 << 8);
 }
 
-fn showCharSet(framebuffer: *[WINDOW_WIDTH * WINDOW_HEIGHT]u32) !void {
-    var x: u32 = 480;
-    var y: u32 = 216;
-    var i: u8 = 0;
-    var current_char: u8 = 0;
-    while (current_char < 128) : (current_char += 1) {
-        if (current_char > 0 and current_char % 32 == 0) {
-            x += 40;
-            y = 216;
-        }
-        var numbering = [_]u8{0x20} ** 3;
-        var numbering_stream = stream(&numbering);
-        const writer = numbering_stream.writer();
-        try writer.print("{X:0>2}:", .{current_char});
-        i = 0;
-        while (i < 3) : (i += 1) {
-            try drawCharacterToFramebuffer(&character_set[numbering[i]], framebuffer, x + (8 * i), y);
-        }
-        try drawCharacterToFramebuffer(&character_set[current_char], framebuffer, x + 24, y);
-        y += 8;
-    }
-}
-
-fn explodeU8(input: u8) []u32 {
-    var output: [8]u32 = undefined;
-    var i: u4 = 0;
-    while (i < 8) : (i += 1) {
-        if (((input >> @intCast(i)) & 1) == 1) {
-            output[i] = 255 + (255 << 8) + (255 << 16) + (255 << 24);
-        } else {
-            output[i] = 255;
-        }
-    }
-    return &output;
-}
-
-fn drawCharacterToFramebuffer(character: *[8]u8, framebuffer: *[WINDOW_WIDTH * WINDOW_HEIGHT]u32, x: u32, y: u32) ArgumentError!void {
-    if ((x + 16 > WINDOW_WIDTH) or (y + 16 > WINDOW_HEIGHT))
-        return ArgumentError.OutOfRange;
-
-    var i: u8 = 0;
-    while (i < 16) : (i += 2) {
-        const exploded = explodeU8(character[i / 2]);
-        var char_x: u8 = 0;
-        while (char_x < 8) : (char_x += 1) {
-            framebuffer[(y + i) * WINDOW_WIDTH + x + char_x] = exploded[char_x];
-            framebuffer[(y + i + 1) * WINDOW_WIDTH + x + char_x] = exploded[char_x];
-        }
-    }
-}
-
-fn drawStringToFramebuffer(string: []const u8, framebuffer: *[WINDOW_WIDTH * WINDOW_HEIGHT]u32, x: u32, y: u32) ArgumentError!void {
+fn drawStringToFramebuffer(string: []const u8, x: u32, y: u32, foreground: u24) !void {
     const length = string.len;
     var i: u32 = 0;
     while (i < length) : (i += 1) {
-        drawCharacterToFramebuffer(&character_set[string[i]], framebuffer, x + (8 * i), y) catch |err| return err;
+        pixel_screen.drawCharacterToFramebuffer8x16(&pixel_screen.character_set[string[i]], x + (8 * i), y, foreground) catch |err| return err;
     }
 }
-
-const ArgumentError = error{OutOfRange};

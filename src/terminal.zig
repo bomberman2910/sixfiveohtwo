@@ -1,9 +1,10 @@
 pub const TerminalScreen = struct {
     buffer: [960]u8,
     cursor_position: u10,
+    cursor_visible: bool,
 
     pub fn init() TerminalScreen {
-        return TerminalScreen{ .buffer = [_]u8{0x20} ** 960, .cursor_position = 0 };
+        return TerminalScreen{ .buffer = [_]u8{0x20} ** 960, .cursor_position = 0, .cursor_visible = false };
     }
 
     pub fn writeCharacter(self: *TerminalScreen, character: u8) void {
@@ -20,6 +21,16 @@ pub const TerminalScreen = struct {
         var missing_spaces = @as(u10, 40) - position_in_line;
         while (missing_spaces > 0) : (missing_spaces -= 1) {
             self.writeCharacter(0x20);
+        }
+    }
+
+    pub fn toggleCursor(self: *TerminalScreen) void {
+        if (self.cursor_visible) {
+            self.cursor_visible = false;
+            self.buffer[self.cursor_position] = 0x20;
+        } else {
+            self.cursor_visible = true;
+            self.buffer[self.cursor_position] = 1;
         }
     }
 };
