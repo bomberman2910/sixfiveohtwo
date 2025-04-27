@@ -99,207 +99,7 @@ pub fn main() !void {
         }
 
         const is_monitor_ready_for_input = try cpu.bus.read(0xD011) & 0x80 != 0x80;
-
-        if (!is_key_press_handled) {
-            // emulator control
-            if (keyboard_state[sdl.SDL_SCANCODE_F5]) {
-                try cpu.reset();
-                is_key_press_handled = true;
-            } else if (keyboard_state[sdl.SDL_SCANCODE_F10]) {
-                if (!is_cpu_running)
-                    try cpu.clock();
-                is_key_press_handled = true;
-            } else if (keyboard_state[sdl.SDL_SCANCODE_F11]) {
-                is_cpu_running = !is_cpu_running;
-                is_key_press_handled = true;
-            }
-            // hex characters
-            else if (keyboard_state[sdl.SDL_SCANCODE_0] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey(')', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('0', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_1] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('!', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('1', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_2] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('@', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('2', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_3] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('#', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('3', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_4] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('$', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('4', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_5] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('%', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('5', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_6] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('^', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('6', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_7] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('&', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('7', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_8] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('*', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('8', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_9] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('(', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('9', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_A] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('A', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_B] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('B', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_C] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('C', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_D] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('D', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_E] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('E', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_F] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('F', &cpu);
-            }
-            // remaining letters
-            else if (keyboard_state[sdl.SDL_SCANCODE_G] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('G', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_H] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('H', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_I] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('I', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_J] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('J', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_K] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('K', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_L] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('L', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_M] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('M', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_N] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('N', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_O] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('O', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_P] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('P', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_Q] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('Q', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_R] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('R', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_S] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('S', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_T] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('T', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_U] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('U', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_V] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('V', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_W] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('W', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_X] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('X', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_Y] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('Y', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_Z] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('Z', &cpu);
-            }
-            // control keys and special characters
-            else if (keyboard_state[sdl.SDL_SCANCODE_BACKSPACE] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey('_', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_EQUALS] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('+', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('=', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_MINUS] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('_', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('-', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_SLASH] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('?', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('/', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_COMMA] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('<', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey(',', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_SPACE] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey(' ', &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_PERIOD] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('>', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('.', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_SEMICOLON] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey(':', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey(';', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_APOSTROPHE] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('"', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('\'', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_LEFTBRACKET] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('{', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('[', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_RIGHTBRACKET] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('}', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey(']', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_BACKSLASH] and is_monitor_ready_for_input) {
-                if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-                    is_key_press_handled = try pressKey('|', &cpu);
-                } else {
-                    is_key_press_handled = try pressKey('\\', &cpu);
-                }
-            } else if (keyboard_state[sdl.SDL_SCANCODE_RETURN] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey(0x0D, &cpu);
-            } else if (keyboard_state[sdl.SDL_SCANCODE_ESCAPE] and is_monitor_ready_for_input) {
-                is_key_press_handled = try pressKey(0x1B, &cpu);
-            }
-        }
+        is_key_press_handled = try handleKeyPress(is_key_press_handled, keyboard_state, &cpu, &is_cpu_running, is_monitor_ready_for_input);
 
         try showProcessorState(&cpu, &framebuffer);
         try showTerminalScreen(&framebuffer);
@@ -337,6 +137,211 @@ pub fn main() !void {
             cursor_state = !cursor_state;
         }
     }
+}
+
+fn handleKeyPress(is_key_press_handled: bool, keyboard_state: [512]bool, cpu: *processor.Cpu, is_cpu_running: *bool, is_monitor_ready_for_input: bool) !bool {
+    if (is_key_press_handled) {
+        return true;
+    }
+    // emulator control
+    if (keyboard_state[sdl.SDL_SCANCODE_F5]) {
+        try cpu.reset();
+        return true;
+    } else if (keyboard_state[sdl.SDL_SCANCODE_F10]) {
+        if (!is_cpu_running.*)
+            try cpu.clock();
+        return true;
+    } else if (keyboard_state[sdl.SDL_SCANCODE_F11]) {
+        is_cpu_running.* = !is_cpu_running.*;
+        return true;
+    }
+    // hex characters
+    else if (keyboard_state[sdl.SDL_SCANCODE_0] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey(')', cpu);
+        } else {
+            return try pressKey('0', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_1] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('!', cpu);
+        } else {
+            return try pressKey('1', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_2] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('@', cpu);
+        } else {
+            return try pressKey('2', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_3] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('#', cpu);
+        } else {
+            return try pressKey('3', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_4] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('$', cpu);
+        } else {
+            return try pressKey('4', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_5] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('%', cpu);
+        } else {
+            return try pressKey('5', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_6] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('^', cpu);
+        } else {
+            return try pressKey('6', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_7] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('&', cpu);
+        } else {
+            return try pressKey('7', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_8] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('*', cpu);
+        } else {
+            return try pressKey('8', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_9] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('(', cpu);
+        } else {
+            return try pressKey('9', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_A] and is_monitor_ready_for_input) {
+        return try pressKey('A', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_B] and is_monitor_ready_for_input) {
+        return try pressKey('B', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_C] and is_monitor_ready_for_input) {
+        return try pressKey('C', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_D] and is_monitor_ready_for_input) {
+        return try pressKey('D', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_E] and is_monitor_ready_for_input) {
+        return try pressKey('E', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_F] and is_monitor_ready_for_input) {
+        return try pressKey('F', cpu);
+    }
+    // remaining letters
+    else if (keyboard_state[sdl.SDL_SCANCODE_G] and is_monitor_ready_for_input) {
+        return try pressKey('G', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_H] and is_monitor_ready_for_input) {
+        return try pressKey('H', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_I] and is_monitor_ready_for_input) {
+        return try pressKey('I', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_J] and is_monitor_ready_for_input) {
+        return try pressKey('J', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_K] and is_monitor_ready_for_input) {
+        return try pressKey('K', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_L] and is_monitor_ready_for_input) {
+        return try pressKey('L', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_M] and is_monitor_ready_for_input) {
+        return try pressKey('M', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_N] and is_monitor_ready_for_input) {
+        return try pressKey('N', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_O] and is_monitor_ready_for_input) {
+        return try pressKey('O', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_P] and is_monitor_ready_for_input) {
+        return try pressKey('P', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_Q] and is_monitor_ready_for_input) {
+        return try pressKey('Q', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_R] and is_monitor_ready_for_input) {
+        return try pressKey('R', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_S] and is_monitor_ready_for_input) {
+        return try pressKey('S', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_T] and is_monitor_ready_for_input) {
+        return try pressKey('T', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_U] and is_monitor_ready_for_input) {
+        return try pressKey('U', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_V] and is_monitor_ready_for_input) {
+        return try pressKey('V', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_W] and is_monitor_ready_for_input) {
+        return try pressKey('W', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_X] and is_monitor_ready_for_input) {
+        return try pressKey('X', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_Y] and is_monitor_ready_for_input) {
+        return try pressKey('Y', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_Z] and is_monitor_ready_for_input) {
+        return try pressKey('Z', cpu);
+    }
+    // control keys and special characters
+    else if (keyboard_state[sdl.SDL_SCANCODE_BACKSPACE] and is_monitor_ready_for_input) {
+        return try pressKey('_', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_EQUALS] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('+', cpu);
+        } else {
+            return try pressKey('=', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_MINUS] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('_', cpu);
+        } else {
+            return try pressKey('-', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_SLASH] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('?', cpu);
+        } else {
+            return try pressKey('/', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_COMMA] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('<', cpu);
+        } else {
+            return try pressKey(',', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_SPACE] and is_monitor_ready_for_input) {
+        return try pressKey(' ', cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_PERIOD] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('>', cpu);
+        } else {
+            return try pressKey('.', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_SEMICOLON] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey(':', cpu);
+        } else {
+            return try pressKey(';', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_APOSTROPHE] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('"', cpu);
+        } else {
+            return try pressKey('\'', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_LEFTBRACKET] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('{', cpu);
+        } else {
+            return try pressKey('[', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_RIGHTBRACKET] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('}', cpu);
+        } else {
+            return try pressKey(']', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_BACKSLASH] and is_monitor_ready_for_input) {
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            return try pressKey('|', cpu);
+        } else {
+            return try pressKey('\\', cpu);
+        }
+    } else if (keyboard_state[sdl.SDL_SCANCODE_RETURN] and is_monitor_ready_for_input) {
+        return try pressKey(0x0D, cpu);
+    } else if (keyboard_state[sdl.SDL_SCANCODE_ESCAPE] and is_monitor_ready_for_input) {
+        return try pressKey(0x1B, cpu);
+    }
+    return false;
 }
 
 fn pressKey(char: u8, cpu: *processor.Cpu) !bool {
