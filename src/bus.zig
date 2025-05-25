@@ -22,7 +22,7 @@ pub const Bus = struct {
         self.devices.deinit();
     }
 
-    pub fn addDevice(self: *Bus, start: u16, length: u17, clockAction: ?*const fn (self: *BusDevice, last_read_address: ?u16) void, isReadOnly: bool) !void {
+    pub fn addDevice(self: *Bus, start: u16, length: u17, clockAction: ?*const fn (self: *BusDevice, last_read_address: ?u16) anyerror!void, isReadOnly: bool) !void {
         var device = BusDevice.init(self.allocator, start, clockAction, isReadOnly);
         try device.setMemSize(length);
         try self.devices.append(device);
@@ -57,10 +57,10 @@ pub const Bus = struct {
         return BusError.NoDeviceAtAddress;
     }
 
-    pub fn clock(self: *Bus) void {
+    pub fn clock(self: *Bus) !void {
         for (self.devices.items) |*device| {
             if (device.clock) |clockAction| {
-                clockAction(device, self.last_read_address);
+                try clockAction(device, self.last_read_address);
             }
         }
         self.last_read_address = null;

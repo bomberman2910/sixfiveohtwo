@@ -4,11 +4,11 @@ pub const BusDevice = struct {
     start: u16,
     length: u17 = 0,
     data: []u8 = undefined,
-    clock: ?*const fn (self: *BusDevice, last_read_address: ?u16) void,
+    clock: ?*const fn (self: *BusDevice, last_read_address: ?u16) anyerror!void,
     isReadOnly: bool,
     allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, start: u16, clockAction: ?*const fn (self: *BusDevice, last_read_address: ?u16) void, isReadOnly: bool) BusDevice {
+    pub fn init(allocator: std.mem.Allocator, start: u16, clockAction: ?*const fn (self: *BusDevice, last_read_address: ?u16) anyerror!void, isReadOnly: bool) BusDevice {
         return BusDevice{ .start = start, .clock = clockAction, .isReadOnly = isReadOnly, .allocator = allocator };
     }
 

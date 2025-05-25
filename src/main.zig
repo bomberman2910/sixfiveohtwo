@@ -72,11 +72,17 @@ pub fn main() !void {
     var cpu = processor.Cpu.init(allocator);
     defer cpu.deinit();
 
-    // RAM
-    try cpu.bus.addDevice(0x0000, 0x4000, null, false);
+    // base RAM
+    try cpu.bus.addDevice(0x0000, 0x0400, null, false);
+    // text RAM
+    try cpu.bus.addDevice(0x0400, 0x0400, move_text_buffer, false);
+    // unused RAM
+    try cpu.bus.addDevice(0x0800, 0x3800, null, false);
     // ROM
     try cpu.bus.addDevice(0xFF00, 0x0100, null, true);
     try cpu.bus.writeToDevice(0xFF00, @embedFile("monitor.rom"));
+    // Apple 2 graphics control registers
+    try cpu.bus.addDevice(0xC050, 0x0008, graphics_clock, false);
     // PIA
     try cpu.bus.addDevice(0xD010, 0x0004, pia_clock, false);
     // BASIC ROM
@@ -372,7 +378,7 @@ fn pressKey(char: u8, cpu: *processor.Cpu) !bool {
     return true;
 }
 
-fn pia_clock(self: *busdevice.BusDevice, last_read_address: ?u16) void {
+fn pia_clock(self: *busdevice.BusDevice, last_read_address: ?u16) !void {
     // std.debug.print("{X} {X} {X} {X}\n", .{ self.data[0], self.data[1], self.data[2], self.data[3] });
 
     if (self.data[2] & 0x80 == 0x80) {
@@ -388,6 +394,58 @@ fn pia_clock(self: *busdevice.BusDevice, last_read_address: ?u16) void {
         if (address == 0xD011) {
             self.data[1] &= ~@as(u8, 0x80);
         }
+    }
+}
+
+var last_graphics_register_state = [_]u8{0} ** 8;
+fn graphics_clock(self: *busdevice.BusDevice, last_read_address: ?u16) !void {
+    var changed_registers = [_]bool{false} ** 8;
+    var i: u4 = 0;
+    while (i < 8) : (i += 1) {
+        if (self.data[i] != last_graphics_register_state[i]) {
+            changed_registers[i] = true;
+            last_graphics_register_state[i] = self.data[i];
+        }
+    }
+    if (changed_registers[0] or last_read_address == 0xC050) { // switch to graphics mode
+        pixel_screen.switchToGraphicsMode();
+    } else if (changed_registers[1] or last_read_address == 0xC051) { // switch to text mode
+        try pixel_screen.switchToTextMode();
+    } else if (changed_registers[2] or last_read_address == 0xC052) { // full screen graphics
+        // TODO to be implemented
+    } else if (changed_registers[3] or last_read_address == 0xC053) { // mixed screen graphics/text
+        // TODO to be implemented
+    } else if (changed_registers[4] or last_read_address == 0xC054) { // switch to page 1
+        // TODO to be implemented
+    } else if (changed_registers[5] or last_read_address == 0xC055) { // switch to page 2
+        // TODO to be implemented
+    } else if (changed_registers[6] or last_read_address == 0xC056) { // switch to low res graphics
+        pixel_screen.is_graphics_high_resolution = false;
+    } else if (changed_registers[7] or last_read_address == 0xC057) { // switch to high res graphics
+        pixel_screen.is_graphics_high_resolution = true;
+    }
+}
+
+fn move_text_buffer(self: *busdevice.BusDevice, last_read_address: ?u16) !void {
+    _ = last_read_address;
+    if (pixel_screen.is_in_textmode) {
+        @memcpy(pixel_screen.text_buffer[0..(40 * 24)], terminal_screen.buffer[0..(40 * 24)]);
+    } else if (!pixel_screen.is_in_textmode and !pixel_screen.is_graphics_high_resolution) {
+        var i: usize = 0;
+        var line_start_address: u16 = 0x0400;
+        while (i < 8) : (i += 1) {
+            @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i * 80))..(line_start_address + (i * 80) + 40)]);
+        }
+        line_start_address = 0x0428;
+        while (i < 8) : (i += 1) {
+            @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i * 80))..(line_start_address + (i * 80) + 40)]);
+        }
+        line_start_address = 0x0450;
+        while (i < 8) : (i += 1) {
+            @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i * 80))..(line_start_address + (i * 80) + 40)]);
+        }
+    } else {
+        // TODO ignore hi res for now
     }
 }
 

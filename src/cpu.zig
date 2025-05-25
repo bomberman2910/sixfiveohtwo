@@ -585,7 +585,7 @@ pub const Cpu = struct {
             }
             self.total_cycles += self.current_cycles;
         }
-        self.bus.clock();
+        try self.bus.clock();
     }
 
     fn todo() CpuError!void {
