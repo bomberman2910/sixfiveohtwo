@@ -16,12 +16,14 @@ pub const PixelScreen = struct {
     }
 
     pub fn switchToTextMode(self: *PixelScreen) !void {
+        std.debug.print("switching to text mode\n", .{});
         self.is_in_textmode = true;
         @memcpy(self.text_buffer[0..(40 * 24)], EMPTY_TEXT_BUFFER[0..(40 * 24)]);
         try self.renderTextToFrameBuffer();
     }
 
     pub fn switchToGraphicsMode(self: *PixelScreen) void {
+        std.debug.print("switching to graphics mode\n", .{});
         self.is_in_textmode = false;
         if (!self.is_graphics_high_resolution) {
             @memcpy(self.text_buffer[0..(40 * 24)], EMPTY_TEXT_BUFFER[0..(40 * 24)]);
@@ -45,21 +47,21 @@ pub const PixelScreen = struct {
                 const upper_half = cell_content & 0xF0;
                 self.text_buffer[(y / 2) * 40 + x] = upper_half | color;
             }
-            self.renderLowResBufferToFrameBuffer();
+            try self.renderLowResBufferToFrameBuffer();
         }
     }
 
-    pub fn renderLowResBufferToFrameBuffer(self: *PixelScreen) void {
+    pub fn renderLowResBufferToFrameBuffer(self: *PixelScreen) !void {
         if (self.is_in_textmode) {
             return;
         }
-        const square = [_]u8{ 255, 255, 255, 255, 0, 0, 0, 0 };
+        var square = [_]u8{ 255, 255, 255, 255, 0, 0, 0, 0 };
 
         var x: u32 = 0;
         var y: u32 = 3; // leave three rows of text free at the top (24 pixels)
         var i: usize = 0;
         while (i < (40 * 24)) : (i += 1) {
-            try self.drawCharacterToFramebuffer16x16WithBackground(&square, x * 16, y * 16, @as(u4, @intCast(colorCodeToRgb(self.text_buffer[y * 40 + x] >> 4))), @as(u4, @intCast(colorCodeToRgb(self.text_buffer[y * 40 + x] & 0xF))));
+            try self.drawCharacterToFramebuffer16x16WithBackground(&square, x * 16, y * 16, colorCodeToRgb(@truncate(self.text_buffer[(y - 3) * 40 + x] >> 4)), colorCodeToRgb(@truncate(self.text_buffer[(y - 3) * 40 + x] & 0xF)));
             x += 1;
             if (x == 40) {
                 x = 0;

@@ -117,7 +117,11 @@ pub fn main() !void {
         try showProcessorState(&cpu);
         showTerminalScreen();
 
-        try pixel_screen.renderTextToFrameBuffer();
+        if (pixel_screen.is_in_textmode) {
+            try pixel_screen.renderTextToFrameBuffer();
+        } else {
+            try pixel_screen.renderLowResBufferToFrameBuffer();
+        }
 
         var current_cycles_buffer = [_]u8{0} ** 20;
         var current_cycles_stream = std.io.fixedBufferStream(&current_cycles_buffer);
@@ -407,6 +411,9 @@ fn graphics_clock(self: *busdevice.BusDevice, last_read_address: ?u16) !void {
             last_graphics_register_state[i] = self.data[i];
         }
     }
+    if (last_read_address.? >= 0xC050 and last_read_address.? <= 0xC057) {
+        std.debug.print("{X}\n", .{last_read_address.?});
+    }
     if (changed_registers[0] or last_read_address == 0xC050) { // switch to graphics mode
         pixel_screen.switchToGraphicsMode();
     } else if (changed_registers[1] or last_read_address == 0xC051) { // switch to text mode
@@ -432,15 +439,15 @@ fn move_text_buffer(self: *busdevice.BusDevice, last_read_address: ?u16) !void {
         @memcpy(pixel_screen.text_buffer[0..(40 * 24)], terminal_screen.buffer[0..(40 * 24)]);
     } else if (!pixel_screen.is_in_textmode and !pixel_screen.is_graphics_high_resolution) {
         var i: usize = 0;
-        var line_start_address: u16 = 0x0400;
+        var line_start_address: u16 = 0x0000;
         while (i < 8) : (i += 1) {
             @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i * 80))..(line_start_address + (i * 80) + 40)]);
         }
-        line_start_address = 0x0428;
+        line_start_address = 0x0028;
         while (i < 8) : (i += 1) {
             @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i * 80))..(line_start_address + (i * 80) + 40)]);
         }
-        line_start_address = 0x0450;
+        line_start_address = 0x0050;
         while (i < 8) : (i += 1) {
             @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i * 80))..(line_start_address + (i * 80) + 40)]);
         }
