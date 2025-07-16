@@ -46,7 +46,8 @@ pub const Bus = struct {
             const lastAddress = device.start + (device.length - 1);
             if (device.start <= address and lastAddress >= address) {
                 if (device.isReadOnly) {
-                    return BusError.CannotWriteToReadOnlyDevice;
+                    std.debug.print("Tried writing to readonly address {X:0>4}\n", .{address});
+                    return; // BusError.CannotWriteToReadOnlyDevice;
                 }
                 const offset = address - device.start;
                 device.data[offset] = data;

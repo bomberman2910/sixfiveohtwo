@@ -74,20 +74,59 @@ pub fn main() !void {
 
     // base RAM
     try cpu.bus.addDevice(0x0000, 0x0400, null, false);
-    // text RAM
+    // text/lowres page 1 RAM
     try cpu.bus.addDevice(0x0400, 0x0400, move_text_buffer, false);
-    // unused RAM
-    try cpu.bus.addDevice(0x0800, 0x3800, null, false);
+    // text/lowres page 2 RAM
+    try cpu.bus.addDevice(0x0800, 0x0400, null, false);
+    // hires page 1
+    try cpu.bus.addDevice(0x2000, 0x2000, null, false);
+    // hires page 2
+    try cpu.bus.addDevice(0x4000, 0x2000, null, false);
+    // free RAM
+    try cpu.bus.addDevice(0x0C00, 0x1400, null, false);
+    // free RAM
+    try cpu.bus.addDevice(0x6000, 0x6000, null, false);
     // ROM
-    try cpu.bus.addDevice(0xFF00, 0x0100, null, true);
-    try cpu.bus.writeToDevice(0xFF00, @embedFile("monitor.rom"));
+    //try cpu.bus.addDevice(0xFF00, 0x0100, null, true);
+    //try cpu.bus.writeToDevice(0xFF00, @embedFile("monitor.rom"));
     // Apple 2 graphics control registers
     try cpu.bus.addDevice(0xC050, 0x0008, graphics_clock, false);
     // PIA
-    try cpu.bus.addDevice(0xD010, 0x0004, pia_clock, false);
+    //try cpu.bus.addDevice(0xD010, 0x0004, pia_clock, false);
     // BASIC ROM
-    try cpu.bus.addDevice(0xE000, 0x1000, null, true);
-    try cpu.bus.writeToDevice(0xE000, @embedFile("basic.rom"));
+    //try cpu.bus.addDevice(0xE000, 0x1000, null, true);
+    //texturery cpu.bus.writeToDevice(0xE000, @embedFile("basic.rom"));
+
+    // Apple 2 ROMs
+    try cpu.bus.addDevice(0xD000, 0x0800, null, true);
+    try cpu.bus.writeToDevice(0xD000, @embedFile("341011d0.bin"));
+    try cpu.bus.addDevice(0xD800, 0x0800, null, true);
+    try cpu.bus.writeToDevice(0xD800, @embedFile("341012d8.bin"));
+    try cpu.bus.addDevice(0xE000, 0x0800, null, true);
+    try cpu.bus.writeToDevice(0xE000, @embedFile("341013e0.bin"));
+    try cpu.bus.addDevice(0xE800, 0x0800, null, true);
+    try cpu.bus.writeToDevice(0xE800, @embedFile("341014e8.bin"));
+    try cpu.bus.addDevice(0xF000, 0x0800, null, true);
+    try cpu.bus.writeToDevice(0xF000, @embedFile("341015f0.bin"));
+    try cpu.bus.addDevice(0xF800, 0x0800, null, true);
+    try cpu.bus.writeToDevice(0xF800, @embedFile("341020f8.bin"));
+
+    // Apple 2 soft switches
+    try cpu.bus.addDevice(0xC058, 0x0008, null, false); // annunciator inputs
+    try cpu.bus.addDevice(0xCFFF, 0x0001, null, false); // slot c8 ROM switch out
+    try cpu.bus.addDevice(0xC010, 0x0001, null, false); // keyboard data available latch
+    try cpu.bus.addDevice(0xC000, 0x0001, clear_keyboard_strobe, false); // keyboard data register
+    try cpu.bus.addDevice(0xC030, 0x0001, null, false); // toggle speaker diaphragm
+
+    //Apple 2 slot cards
+    try cpu.bus.addDevice(0xC100, 0x0100, null, true); // slot 1
+    try cpu.bus.addDevice(0xC200, 0x0100, null, true); // slot 2
+    try cpu.bus.addDevice(0xC300, 0x0100, null, true); // slot 3
+    try cpu.bus.addDevice(0xC400, 0x0100, null, true); // slot 4
+    try cpu.bus.addDevice(0xC500, 0x0100, null, true); // slot 5
+    try cpu.bus.addDevice(0xC600, 0x0100, null, true); // slot 6
+    try cpu.bus.addDevice(0xC700, 0x0100, null, true); // slot 7
+    try cpu.bus.addDevice(0xC800, 0x0800, null, true); // extended slot ROM
 
     var is_key_press_handled = false;
     var is_cpu_running = false;
@@ -111,7 +150,7 @@ pub fn main() !void {
             }
         }
 
-        const is_monitor_ready_for_input = try cpu.bus.read(0xD011) & 0x80 != 0x80;
+        const is_monitor_ready_for_input = true; // try cpu.bus.read(0xD011) & 0x80 != 0x80;
         is_key_press_handled = try handleKeyPress(is_key_press_handled, keyboard_state, &cpu, &is_cpu_running, is_monitor_ready_for_input);
 
         if (pixel_screen.is_in_textmode) {
@@ -375,10 +414,14 @@ fn handleKeyPress(is_key_press_handled: bool, keyboard_state: [512]bool, cpu: *p
     return false;
 }
 
+fn clear_keyboard_strobe(self: *busdevice.BusDevice, last_read_address: ?u16) !void {
+    if (last_read_address == 0xC010) {
+        self.data[0] = self.data[0] & 0x7F;
+    }
+}
+
 fn pressKey(char: u8, cpu: *processor.Cpu) !bool {
-    try cpu.bus.write(0xD010, char + 0x80);
-    const kbdcr = try cpu.bus.read(0xD011);
-    try cpu.bus.write(0xD011, kbdcr | 0x80);
+    try cpu.bus.write(0xC000, char + 0x80);
     return true;
 }
 
@@ -435,25 +478,25 @@ fn graphics_clock(self: *busdevice.BusDevice, last_read_address: ?u16) !void {
 
 fn move_text_buffer(self: *busdevice.BusDevice, last_read_address: ?u16) !void {
     _ = last_read_address;
-    if (pixel_screen.is_in_textmode) {
-        @memcpy(pixel_screen.text_buffer[0..(40 * 24)], terminal_screen.buffer[0..(40 * 24)]);
-    } else if (!pixel_screen.is_in_textmode and !pixel_screen.is_graphics_high_resolution) {
-        var i: usize = 0;
-        var line_start_address: u16 = 0x0000;
-        while (i < 8) : (i += 1) {
-            @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i * 0x80))..(line_start_address + (i * 0x80) + 40)]);
-        }
-        line_start_address = 0x0028;
-        while (i < 16) : (i += 1) {
-            @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i % 8 * 0x80))..(line_start_address + (i % 8 * 0x80) + 40)]);
-        }
-        line_start_address = 0x0050;
-        while (i < 24) : (i += 1) {
-            @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i % 8 * 0x80))..(line_start_address + (i % 8 * 0x80) + 40)]);
-        }
-    } else {
-        // TODO ignore hi res for now
+    //if (pixel_screen.is_in_textmode) {
+    //    @memcpy(pixel_screen.text_buffer[0..(40 * 24)], terminal_screen.buffer[0..(40 * 24)]);
+    //} else if (!pixel_screen.is_in_textmode and !pixel_screen.is_graphics_high_resolution) {
+    var i: usize = 0;
+    var line_start_address: u16 = 0x0000;
+    while (i < 8) : (i += 1) {
+        @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i * 0x80))..(line_start_address + (i * 0x80) + 40)]);
     }
+    line_start_address = 0x0028;
+    while (i < 16) : (i += 1) {
+        @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i % 8 * 0x80))..(line_start_address + (i % 8 * 0x80) + 40)]);
+    }
+    line_start_address = 0x0050;
+    while (i < 24) : (i += 1) {
+        @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i % 8 * 0x80))..(line_start_address + (i % 8 * 0x80) + 40)]);
+    }
+    //} else {
+    // TODO ignore hi res for now
+    //}
 }
 
 fn showTerminalScreen() void {
@@ -478,6 +521,15 @@ fn showProcessorState(cpu: *processor.Cpu) !void {
     writer = instruction_buffer_stream.writer();
     try writer.print("                           {s}", .{current_instruction});
     try drawStringToFramebuffer(&instruction_buffer, 0, 32, 255 << 8);
+
+    var keyboard_state_buffer = [_]u8{0} ** 8;
+    var keyboard_state_stream = std.io.fixedBufferStream(&keyboard_state_buffer);
+    writer = keyboard_state_stream.writer();
+    try writer.print("C000:{X:0>2}", .{cpu.bus.read(0xC000) catch 0xFF});
+    try drawStringToFramebuffer(&keyboard_state_buffer, 41 * 8, 0, 255 << 8);
+    try keyboard_state_stream.seekTo(0);
+    try writer.print("C010:{X:0>2}", .{cpu.bus.read(0xC010) catch 0xFF});
+    try drawStringToFramebuffer(&keyboard_state_buffer, 41 * 8, 16, 255 << 8);
 }
 
 fn drawStringToFramebuffer(string: []const u8, x: u32, y: u32, foreground: u24) !void {
