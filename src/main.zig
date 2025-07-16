@@ -114,14 +114,14 @@ pub fn main() !void {
         const is_monitor_ready_for_input = try cpu.bus.read(0xD011) & 0x80 != 0x80;
         is_key_press_handled = try handleKeyPress(is_key_press_handled, keyboard_state, &cpu, &is_cpu_running, is_monitor_ready_for_input);
 
-        try showProcessorState(&cpu);
-        showTerminalScreen();
-
         if (pixel_screen.is_in_textmode) {
             try pixel_screen.renderTextToFrameBuffer();
         } else {
             try pixel_screen.renderLowResBufferToFrameBuffer();
         }
+
+        try showProcessorState(&cpu);
+        showTerminalScreen();
 
         var current_cycles_buffer = [_]u8{0} ** 20;
         var current_cycles_stream = std.io.fixedBufferStream(&current_cycles_buffer);
@@ -441,15 +441,15 @@ fn move_text_buffer(self: *busdevice.BusDevice, last_read_address: ?u16) !void {
         var i: usize = 0;
         var line_start_address: u16 = 0x0000;
         while (i < 8) : (i += 1) {
-            @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i * 80))..(line_start_address + (i * 80) + 40)]);
+            @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i * 0x80))..(line_start_address + (i * 0x80) + 40)]);
         }
         line_start_address = 0x0028;
-        while (i < 8) : (i += 1) {
-            @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i * 80))..(line_start_address + (i * 80) + 40)]);
+        while (i < 16) : (i += 1) {
+            @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i % 8 * 0x80))..(line_start_address + (i % 8 * 0x80) + 40)]);
         }
         line_start_address = 0x0050;
-        while (i < 8) : (i += 1) {
-            @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i * 80))..(line_start_address + (i * 80) + 40)]);
+        while (i < 24) : (i += 1) {
+            @memcpy(pixel_screen.text_buffer[(i * 40)..(i * 40 + 40)], self.data[(line_start_address + (i % 8 * 0x80))..(line_start_address + (i % 8 * 0x80) + 40)]);
         }
     } else {
         // TODO ignore hi res for now
