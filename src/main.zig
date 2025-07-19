@@ -24,6 +24,9 @@ var pixel_screen = pixelDisplay.PixelScreen.init();
 
 var cursor_frame_count: u8 = 0;
 
+var non_shifted_scancodes = [_]u8{0} ** 512;
+var shifted_scancodes = [_]u8{0} ** 512;
+
 pub fn main() !void {
     const character_rom = @embedFile("charmap.rom");
     var character_stream = stream(character_rom);
@@ -68,6 +71,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     var keyboard_state: [512]bool = [_]bool{false} ** 512;
+    fillScancodeArrays();
 
     var cpu = processor.Cpu.init(allocator);
     defer cpu.deinit();
@@ -87,15 +91,10 @@ pub fn main() !void {
     // free RAM
     try cpu.bus.addDevice(0x6000, 0x6000, null, false);
     // ROM
-    //try cpu.bus.addDevice(0xFF00, 0x0100, null, true);
-    //try cpu.bus.writeToDevice(0xFF00, @embedFile("monitor.rom"));
     // Apple 2 graphics control registers
     try cpu.bus.addDevice(0xC050, 0x0008, graphics_clock, false);
     // PIA
     //try cpu.bus.addDevice(0xD010, 0x0004, pia_clock, false);
-    // BASIC ROM
-    //try cpu.bus.addDevice(0xE000, 0x1000, null, true);
-    //texturery cpu.bus.writeToDevice(0xE000, @embedFile("basic.rom"));
 
     // Apple 2 ROMs
     try cpu.bus.addDevice(0xD000, 0x0800, null, true);
@@ -112,11 +111,11 @@ pub fn main() !void {
     try cpu.bus.writeToDevice(0xF800, @embedFile("341020f8.bin"));
 
     // Apple 2 soft switches
+    try cpu.bus.addDevice(0xC000, 0x0001, clear_keyboard_strobe, false); // keyboard data register
+    try cpu.bus.addDevice(0xC010, 0x0001, null, false); // keyboard data available latch
+    try cpu.bus.addDevice(0xC030, 0x0001, null, false); // toggle speaker diaphragm
     try cpu.bus.addDevice(0xC058, 0x0008, null, false); // annunciator inputs
     try cpu.bus.addDevice(0xCFFF, 0x0001, null, false); // slot c8 ROM switch out
-    try cpu.bus.addDevice(0xC010, 0x0001, null, false); // keyboard data available latch
-    try cpu.bus.addDevice(0xC000, 0x0001, clear_keyboard_strobe, false); // keyboard data register
-    try cpu.bus.addDevice(0xC030, 0x0001, null, false); // toggle speaker diaphragm
 
     //Apple 2 slot cards
     try cpu.bus.addDevice(0xC100, 0x0100, null, true); // slot 1
@@ -150,8 +149,7 @@ pub fn main() !void {
             }
         }
 
-        const is_monitor_ready_for_input = true; // try cpu.bus.read(0xD011) & 0x80 != 0x80;
-        is_key_press_handled = try handleKeyPress(is_key_press_handled, keyboard_state, &cpu, &is_cpu_running, is_monitor_ready_for_input);
+        is_key_press_handled = try handleKeyPress(is_key_press_handled, keyboard_state, &cpu, &is_cpu_running);
 
         if (pixel_screen.is_in_textmode) {
             try pixel_screen.renderTextToFrameBuffer();
@@ -209,7 +207,62 @@ pub fn main() !void {
     }
 }
 
-fn handleKeyPress(is_key_press_handled: bool, keyboard_state: [512]bool, cpu: *processor.Cpu, is_cpu_running: *bool, is_monitor_ready_for_input: bool) !bool {
+fn fillScancodeArrays() void {
+    var i: usize = 4;
+    // letters
+    while (i < 30) : (i += 1) {
+        non_shifted_scancodes[i] = @as(u8, @intCast(i)) + 61;
+    }
+    // numbers
+    while (i < 39) : (i += 1) {
+        non_shifted_scancodes[i] = @as(u8, @intCast(i)) + 19;
+    }
+    non_shifted_scancodes[sdl.SDL_SCANCODE_0] = '0';
+    // special and control characters
+    non_shifted_scancodes[sdl.SDL_SCANCODE_RETURN] = 0x0D;
+    non_shifted_scancodes[sdl.SDL_SCANCODE_ESCAPE] = 0x1B;
+    non_shifted_scancodes[sdl.SDL_SCANCODE_BACKSPACE] = '_';
+    non_shifted_scancodes[sdl.SDL_SCANCODE_EQUALS] = '=';
+    non_shifted_scancodes[sdl.SDL_SCANCODE_MINUS] = '-';
+    non_shifted_scancodes[sdl.SDL_SCANCODE_SLASH] = '/';
+    non_shifted_scancodes[sdl.SDL_SCANCODE_COMMA] = ',';
+    non_shifted_scancodes[sdl.SDL_SCANCODE_SPACE] = ' ';
+    non_shifted_scancodes[sdl.SDL_SCANCODE_PERIOD] = '.';
+    non_shifted_scancodes[sdl.SDL_SCANCODE_SEMICOLON] = ';';
+    non_shifted_scancodes[sdl.SDL_SCANCODE_APOSTROPHE] = '\'';
+    non_shifted_scancodes[sdl.SDL_SCANCODE_LEFTBRACKET] = '[';
+    non_shifted_scancodes[sdl.SDL_SCANCODE_RIGHTBRACKET] = ']';
+    non_shifted_scancodes[sdl.SDL_SCANCODE_BACKSLASH] = '\\';
+    non_shifted_scancodes[sdl.SDL_SCANCODE_DELETE] = 0x7F;
+    // arrow keys
+    non_shifted_scancodes[sdl.SDL_SCANCODE_LEFT] = 0x08;
+    non_shifted_scancodes[sdl.SDL_SCANCODE_UP] = 0x0B;
+    non_shifted_scancodes[sdl.SDL_SCANCODE_RIGHT] = 0x15;
+    non_shifted_scancodes[sdl.SDL_SCANCODE_DOWN] = 0x0A;
+
+    shifted_scancodes[sdl.SDL_SCANCODE_1] = '!';
+    shifted_scancodes[sdl.SDL_SCANCODE_2] = '@';
+    shifted_scancodes[sdl.SDL_SCANCODE_3] = '#';
+    shifted_scancodes[sdl.SDL_SCANCODE_4] = '$';
+    shifted_scancodes[sdl.SDL_SCANCODE_5] = '%';
+    shifted_scancodes[sdl.SDL_SCANCODE_6] = '^';
+    shifted_scancodes[sdl.SDL_SCANCODE_7] = '&';
+    shifted_scancodes[sdl.SDL_SCANCODE_8] = '*';
+    shifted_scancodes[sdl.SDL_SCANCODE_9] = '(';
+    shifted_scancodes[sdl.SDL_SCANCODE_0] = ')';
+    shifted_scancodes[sdl.SDL_SCANCODE_MINUS] = '_';
+    shifted_scancodes[sdl.SDL_SCANCODE_EQUALS] = '+';
+    shifted_scancodes[sdl.SDL_SCANCODE_LEFTBRACKET] = '{';
+    shifted_scancodes[sdl.SDL_SCANCODE_RIGHTBRACKET] = '}';
+    shifted_scancodes[sdl.SDL_SCANCODE_SEMICOLON] = ':';
+    shifted_scancodes[sdl.SDL_SCANCODE_APOSTROPHE] = '"';
+    shifted_scancodes[sdl.SDL_SCANCODE_BACKSLASH] = '|';
+    shifted_scancodes[sdl.SDL_SCANCODE_COMMA] = '<';
+    shifted_scancodes[sdl.SDL_SCANCODE_PERIOD] = '>';
+    shifted_scancodes[sdl.SDL_SCANCODE_SLASH] = '?';
+}
+
+fn handleKeyPress(is_key_press_handled: bool, keyboard_state: [512]bool, cpu: *processor.Cpu, is_cpu_running: *bool) !bool {
     if (is_key_press_handled) {
         return true;
     }
@@ -224,193 +277,24 @@ fn handleKeyPress(is_key_press_handled: bool, keyboard_state: [512]bool, cpu: *p
     } else if (keyboard_state[sdl.SDL_SCANCODE_F11]) {
         is_cpu_running.* = !is_cpu_running.*;
         return true;
+        // hex characters
+    } else {
+        var pressed_key: usize = 0;
+        while (!keyboard_state[pressed_key] and pressed_key < 128) : (pressed_key += 1) {}
+        if (pressed_key == 128) {
+            return false;
+        }
+        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
+            if (shifted_scancodes[pressed_key] > 0) {
+                return pressKey(shifted_scancodes[pressed_key], cpu);
+            }
+        } else {
+            if (non_shifted_scancodes[pressed_key] > 0) {
+                return pressKey(non_shifted_scancodes[pressed_key], cpu);
+            }
+        }
     }
-    // hex characters
-    else if (keyboard_state[sdl.SDL_SCANCODE_0] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey(')', cpu);
-        } else {
-            return try pressKey('0', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_1] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('!', cpu);
-        } else {
-            return try pressKey('1', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_2] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('@', cpu);
-        } else {
-            return try pressKey('2', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_3] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('#', cpu);
-        } else {
-            return try pressKey('3', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_4] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('$', cpu);
-        } else {
-            return try pressKey('4', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_5] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('%', cpu);
-        } else {
-            return try pressKey('5', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_6] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('^', cpu);
-        } else {
-            return try pressKey('6', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_7] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('&', cpu);
-        } else {
-            return try pressKey('7', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_8] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('*', cpu);
-        } else {
-            return try pressKey('8', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_9] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('(', cpu);
-        } else {
-            return try pressKey('9', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_A] and is_monitor_ready_for_input) {
-        return try pressKey('A', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_B] and is_monitor_ready_for_input) {
-        return try pressKey('B', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_C] and is_monitor_ready_for_input) {
-        return try pressKey('C', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_D] and is_monitor_ready_for_input) {
-        return try pressKey('D', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_E] and is_monitor_ready_for_input) {
-        return try pressKey('E', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_F] and is_monitor_ready_for_input) {
-        return try pressKey('F', cpu);
-    }
-    // remaining letters
-    else if (keyboard_state[sdl.SDL_SCANCODE_G] and is_monitor_ready_for_input) {
-        return try pressKey('G', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_H] and is_monitor_ready_for_input) {
-        return try pressKey('H', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_I] and is_monitor_ready_for_input) {
-        return try pressKey('I', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_J] and is_monitor_ready_for_input) {
-        return try pressKey('J', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_K] and is_monitor_ready_for_input) {
-        return try pressKey('K', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_L] and is_monitor_ready_for_input) {
-        return try pressKey('L', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_M] and is_monitor_ready_for_input) {
-        return try pressKey('M', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_N] and is_monitor_ready_for_input) {
-        return try pressKey('N', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_O] and is_monitor_ready_for_input) {
-        return try pressKey('O', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_P] and is_monitor_ready_for_input) {
-        return try pressKey('P', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_Q] and is_monitor_ready_for_input) {
-        return try pressKey('Q', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_R] and is_monitor_ready_for_input) {
-        return try pressKey('R', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_S] and is_monitor_ready_for_input) {
-        return try pressKey('S', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_T] and is_monitor_ready_for_input) {
-        return try pressKey('T', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_U] and is_monitor_ready_for_input) {
-        return try pressKey('U', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_V] and is_monitor_ready_for_input) {
-        return try pressKey('V', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_W] and is_monitor_ready_for_input) {
-        return try pressKey('W', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_X] and is_monitor_ready_for_input) {
-        return try pressKey('X', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_Y] and is_monitor_ready_for_input) {
-        return try pressKey('Y', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_Z] and is_monitor_ready_for_input) {
-        return try pressKey('Z', cpu);
-    }
-    // control keys and special characters
-    else if (keyboard_state[sdl.SDL_SCANCODE_BACKSPACE] and is_monitor_ready_for_input) {
-        return try pressKey('_', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_EQUALS] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('+', cpu);
-        } else {
-            return try pressKey('=', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_MINUS] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('_', cpu);
-        } else {
-            return try pressKey('-', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_SLASH] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('?', cpu);
-        } else {
-            return try pressKey('/', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_COMMA] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('<', cpu);
-        } else {
-            return try pressKey(',', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_SPACE] and is_monitor_ready_for_input) {
-        return try pressKey(' ', cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_PERIOD] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('>', cpu);
-        } else {
-            return try pressKey('.', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_SEMICOLON] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey(':', cpu);
-        } else {
-            return try pressKey(';', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_APOSTROPHE] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('"', cpu);
-        } else {
-            return try pressKey('\'', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_LEFTBRACKET] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('{', cpu);
-        } else {
-            return try pressKey('[', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_RIGHTBRACKET] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('}', cpu);
-        } else {
-            return try pressKey(']', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_BACKSLASH] and is_monitor_ready_for_input) {
-        if (keyboard_state[sdl.SDL_SCANCODE_LSHIFT] or keyboard_state[sdl.SDL_SCANCODE_RSHIFT]) {
-            return try pressKey('|', cpu);
-        } else {
-            return try pressKey('\\', cpu);
-        }
-    } else if (keyboard_state[sdl.SDL_SCANCODE_RETURN] and is_monitor_ready_for_input) {
-        return try pressKey(0x0D, cpu);
-    } else if (keyboard_state[sdl.SDL_SCANCODE_ESCAPE] and is_monitor_ready_for_input) {
-        return try pressKey(0x1B, cpu);
-    }
+
     return false;
 }
 
