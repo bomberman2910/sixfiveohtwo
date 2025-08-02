@@ -1,4 +1,5 @@
 const std = @import("std");
+const characterGenerator = @import("characterGenerator.zig");
 
 const EMPTY_TEXT_BUFFER: [40 * 24]u8 = [_]u8{0x20} ** (40 * 24);
 const FRAME_BUFFER_WIDTH = 640;
@@ -8,11 +9,17 @@ pub const PixelScreen = struct {
     frame_buffer: [FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT]u24,
     is_in_textmode: bool,
     text_buffer: [40 * 24]u8,
-    character_set: [256][8]u8,
     is_graphics_high_resolution: bool,
+    character_generator: characterGenerator.CharacterGenerator,
 
     pub fn init() PixelScreen {
-        return PixelScreen{ .frame_buffer = [_]u24{std.math.maxInt(u24)} ** (FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT), .is_in_textmode = false, .text_buffer = [_]u8{0x20} ** (40 * 24), .character_set = [_][8]u8{[_]u8{0} ** 8} ** 256, .is_graphics_high_resolution = false };
+        return PixelScreen{
+            .frame_buffer = [_]u24{std.math.maxInt(u24)} ** (FRAME_BUFFER_WIDTH * FRAME_BUFFER_HEIGHT),
+            .is_in_textmode = false,
+            .text_buffer = [_]u8{0x20} ** (40 * 24),
+            .is_graphics_high_resolution = false,
+            .character_generator = characterGenerator.CharacterGenerator.init(),
+        };
     }
 
     pub fn switchToTextMode(self: *PixelScreen) !void {
@@ -78,7 +85,7 @@ pub const PixelScreen = struct {
         var y: u32 = 3; // leave three rows of text free at the top (24 pixels)
         var i: usize = 0;
         while (i < (40 * 24)) : (i += 1) {
-            try self.drawCharacterToFramebuffer16x16(&self.character_set[self.text_buffer[i]], x * 16, y * 16, 255 + (255 << 8) + (255 << 16));
+            try self.drawCharacterToFramebuffer16x16(&self.character_generator.getCharacter(self.text_buffer[i]), x * 16, y * 16, 255 + (255 << 8) + (255 << 16));
             x += 1;
             if (x == 40) {
                 x = 0;
@@ -87,7 +94,7 @@ pub const PixelScreen = struct {
         }
     }
 
-    pub fn drawCharacterToFramebuffer16x16(self: *PixelScreen, character: *[8]u8, x: u32, y: u32, foreground: u24) ArgumentError!void {
+    pub fn drawCharacterToFramebuffer16x16(self: *PixelScreen, character: *const [8]u8, x: u32, y: u32, foreground: u24) ArgumentError!void {
         if ((x + 16 > FRAME_BUFFER_WIDTH) or (y + 16 > FRAME_BUFFER_HEIGHT))
             return ArgumentError.OutOfRange;
 

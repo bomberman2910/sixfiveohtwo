@@ -37,7 +37,7 @@ pub const Bus = struct {
                 return device.data[offset];
             }
         }
-        std.debug.print("Tried accessing address {X:0>4}\n", .{address});
+        std.log.err("Tried accessing address {X:0>4}", .{address});
         return BusError.NoDeviceAtAddress;
     }
 
@@ -46,8 +46,8 @@ pub const Bus = struct {
             const lastAddress = device.start + (device.length - 1);
             if (device.start <= address and lastAddress >= address) {
                 if (device.isReadOnly) {
-                    std.debug.print("Tried writing to readonly address {X:0>4}\n", .{address});
-                    return; // BusError.CannotWriteToReadOnlyDevice;
+                    std.log.err("Tried writing to readonly address {X:0>4}", .{address});
+                    return;
                 }
                 const offset = address - device.start;
                 device.data[offset] = data;
@@ -55,6 +55,7 @@ pub const Bus = struct {
             }
         }
 
+        std.log.err("Tried writing to address {X:0>4}", .{address});
         return BusError.NoDeviceAtAddress;
     }
 
@@ -73,6 +74,7 @@ pub const Bus = struct {
                 continue;
             }
             if (device.length != content.len) {
+                std.log.err("content length: {X:0>4}; device length: {X:0>4}\n", .{ content.len, device.length });
                 return BusError.ContentLengthMismatch;
             }
             @memcpy(device.data, content);

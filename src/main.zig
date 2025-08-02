@@ -18,26 +18,25 @@ const NUMBER_INDEX_START = 48;
 const COLON_INDEX = 58;
 const SPACE_INDEX = 32;
 
-var character_set: [128][8]u8 = undefined;
+var character_set: [256][8]u8 = undefined;
 var terminal_screen = terminal.TerminalScreen.init();
 var pixel_screen = pixelDisplay.PixelScreen.init();
 
 var cursor_frame_count: u8 = 0;
 
+var keyboard_state: [512]bool = [_]bool{false} ** 512;
 var non_shifted_scancodes = [_]u8{0} ** 512;
 var shifted_scancodes = [_]u8{0} ** 512;
 
 pub fn main() !void {
-    const character_rom = @embedFile("charmap.rom");
+    const character_rom = @embedFile("342-0265-A.bin");
     var character_stream = stream(character_rom);
-    var i: u8 = 0;
-    while (i < 128) : (i += 1) {
+    var i: u9 = 0;
+    while (i < 256) : (i += 1) {
         var character: [8]u8 = undefined;
         _ = try character_stream.read(&character);
         character_set[i] = character;
     }
-    @memcpy(pixel_screen.character_set[0..127], character_set[0..127]);
-    @memcpy(pixel_screen.character_set[128..255], character_set[0..127]);
 
     try pixel_screen.switchToTextMode();
 
@@ -70,7 +69,6 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    var keyboard_state: [512]bool = [_]bool{false} ** 512;
     fillScancodeArrays();
 
     var cpu = processor.Cpu.init(allocator);
@@ -109,12 +107,21 @@ pub fn main() !void {
     try cpu.bus.writeToDevice(0xF000, @embedFile("341015f0.bin"));
     try cpu.bus.addDevice(0xF800, 0x0800, null, true);
     try cpu.bus.writeToDevice(0xF800, @embedFile("341020f8.bin"));
+    //try cpu.bus.addDevice(0xC200, 0x1E00, null, true);
+    //try cpu.bus.writeToDevice(0xC200, @embedFile("3420135A.BIN")[0x0200..]);
+    //try cpu.bus.addDevice(0xE000, 0x2000, null, true);
+    //try cpu.bus.writeToDevice(0xE000, @embedFile("3420134A.BIN"));
 
     // Apple 2 soft switches
     try cpu.bus.addDevice(0xC000, 0x0001, clear_keyboard_strobe, false); // keyboard data register
+    try cpu.bus.addDevice(0xC001, 0x0001, null, false);
+    try cpu.bus.addDevice(0xC006, 0x0001, null, false); // do not use external slot ROM
+    try cpu.bus.addDevice(0xC007, 0x0001, null, false); // use external slot ROM
     try cpu.bus.addDevice(0xC010, 0x0001, null, false); // keyboard data available latch
+    try cpu.bus.addDevice(0xC011, 0x000F, null, true); // status flags (Bit 7 set means condition is true)
     try cpu.bus.addDevice(0xC030, 0x0001, null, false); // toggle speaker diaphragm
     try cpu.bus.addDevice(0xC058, 0x0008, null, false); // annunciator inputs
+    try cpu.bus.addDevice(0xC061, 0x0002, check_apple_alt_keys, true);
     try cpu.bus.addDevice(0xCFFF, 0x0001, null, false); // slot c8 ROM switch out
 
     //Apple 2 slot cards
@@ -149,7 +156,7 @@ pub fn main() !void {
             }
         }
 
-        is_key_press_handled = try handleKeyPress(is_key_press_handled, keyboard_state, &cpu, &is_cpu_running);
+        is_key_press_handled = try handleKeyPress(is_key_press_handled, &cpu, &is_cpu_running);
 
         if (pixel_screen.is_in_textmode) {
             try pixel_screen.renderTextToFrameBuffer();
@@ -158,7 +165,6 @@ pub fn main() !void {
         }
 
         try showProcessorState(&cpu);
-        showTerminalScreen();
 
         var current_cycles_buffer = [_]u8{0} ** 20;
         var current_cycles_stream = std.io.fixedBufferStream(&current_cycles_buffer);
@@ -202,9 +208,15 @@ pub fn main() !void {
         cursor_frame_count += 1;
         if (cursor_frame_count == 30) {
             cursor_frame_count = 0;
-            terminal_screen.toggleCursor();
+            pixel_screen.character_generator.is_blink_inversed = !pixel_screen.character_generator.is_blink_inversed;
         }
     }
+}
+
+fn check_apple_alt_keys(device: *busdevice.BusDevice, last_read_address: ?u16) !void {
+    _ = last_read_address;
+    device.data[0] = if (keyboard_state[sdl.SDL_SCANCODE_LALT]) 0xFF else 0;
+    device.data[1] = if (keyboard_state[sdl.SDL_SCANCODE_RALT]) 0xFF else 0;
 }
 
 fn fillScancodeArrays() void {
@@ -262,7 +274,7 @@ fn fillScancodeArrays() void {
     shifted_scancodes[sdl.SDL_SCANCODE_SLASH] = '?';
 }
 
-fn handleKeyPress(is_key_press_handled: bool, keyboard_state: [512]bool, cpu: *processor.Cpu, is_cpu_running: *bool) !bool {
+fn handleKeyPress(is_key_press_handled: bool, cpu: *processor.Cpu, is_cpu_running: *bool) !bool {
     if (is_key_press_handled) {
         return true;
     }
@@ -383,30 +395,26 @@ fn move_text_buffer(self: *busdevice.BusDevice, last_read_address: ?u16) !void {
     //}
 }
 
-fn showTerminalScreen() void {
-    @memcpy(pixel_screen.text_buffer[0..(40 * 24)], terminal_screen.buffer[0..(40 * 24)]);
-}
-
 fn showProcessorState(cpu: *processor.Cpu) !void {
     const processor_register_titles = " PC  AC XR YR SP    SR     Instruction:";
     try drawStringToFramebuffer(processor_register_titles, 0, 0, (255 << 16) + (255 << 8));
 
     var current_instruction_bytes = [_]u8{ cpu.bus.read(cpu.state.pc) catch 0x00, cpu.bus.read(@addWithOverflow(cpu.state.pc, 1)[0]) catch 0x00, cpu.bus.read(@addWithOverflow(cpu.state.pc, 2)[0]) catch 0x00 };
 
-    var processor_state_buffer = [_]u8{0} ** 40;
+    var processor_state_buffer = [_]u8{0x20} ** 40;
     var processor_state_stream = std.io.fixedBufferStream(&processor_state_buffer);
     var writer = processor_state_stream.writer();
     try writer.print("{X:0>4} {X:0>2} {X:0>2} {X:0>2} {X:0>2} {b:0>8}  {X:0>2} {X:0>2} {X:0>2}", .{ cpu.state.pc, cpu.state.ac, cpu.state.xr, cpu.state.yr, cpu.state.sp, @as(u8, @bitCast(cpu.state.sr)), current_instruction_bytes[0], current_instruction_bytes[1], current_instruction_bytes[2] });
     try drawStringToFramebuffer(&processor_state_buffer, 0, 16, 255 + (255 << 8) + (255 << 16));
 
     const current_instruction = try disassembler.disassemble(&current_instruction_bytes);
-    var instruction_buffer = [_]u8{0} ** 40;
+    var instruction_buffer = [_]u8{0x20} ** 40;
     var instruction_buffer_stream = std.io.fixedBufferStream(&instruction_buffer);
     writer = instruction_buffer_stream.writer();
     try writer.print("                           {s}", .{current_instruction});
     try drawStringToFramebuffer(&instruction_buffer, 0, 32, 255 << 8);
 
-    var keyboard_state_buffer = [_]u8{0} ** 8;
+    var keyboard_state_buffer = [_]u8{0x20} ** 8;
     var keyboard_state_stream = std.io.fixedBufferStream(&keyboard_state_buffer);
     writer = keyboard_state_stream.writer();
     try writer.print("C000:{X:0>2}", .{cpu.bus.read(0xC000) catch 0xFF});
@@ -420,6 +428,6 @@ fn drawStringToFramebuffer(string: []const u8, x: u32, y: u32, foreground: u24) 
     const length = string.len;
     var i: u32 = 0;
     while (i < length) : (i += 1) {
-        pixel_screen.drawCharacterToFramebuffer8x16(&pixel_screen.character_set[string[i]], x + (8 * i), y, foreground) catch |err| return err;
+        pixel_screen.drawCharacterToFramebuffer8x16(&character_set[string[i] + 128], x + (8 * i), y, foreground) catch |err| return err;
     }
 }
