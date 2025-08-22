@@ -190,7 +190,7 @@ pub fn main() !void {
         _ = sdl.SDL_RenderCopy(renderer, texture, null, null);
         sdl.SDL_RenderPresent(renderer);
 
-        if (cursor_frame_count % 1 == 0 and is_cpu_running) {
+        if (is_cpu_running) {
             var cycles: usize = 0;
             while (cycles < 16666) : (cycles += 1) {
                 try cpu.clock();
@@ -206,7 +206,7 @@ pub fn main() !void {
 
         next_frame += FRAME_TICKS;
         cursor_frame_count += 1;
-        if (cursor_frame_count == 30) {
+        if (cursor_frame_count == 15) {
             cursor_frame_count = 0;
             pixel_screen.character_generator.is_blink_inversed = !pixel_screen.character_generator.is_blink_inversed;
         }
@@ -322,8 +322,6 @@ fn pressKey(char: u8, cpu: *processor.Cpu) !bool {
 }
 
 fn pia_clock(self: *busdevice.BusDevice, last_read_address: ?u16) !void {
-    // std.debug.print("{X} {X} {X} {X}\n", .{ self.data[0], self.data[1], self.data[2], self.data[3] });
-
     if (self.data[2] & 0x80 == 0x80) {
         if (self.data[2] != 0x8D) {
             terminal_screen.writeCharacter(self.data[2]);
@@ -350,9 +348,9 @@ fn graphics_clock(self: *busdevice.BusDevice, last_read_address: ?u16) !void {
             last_graphics_register_state[i] = self.data[i];
         }
     }
-    if (last_read_address.? >= 0xC050 and last_read_address.? <= 0xC057) {
-        std.debug.print("{X}\n", .{last_read_address.?});
-    }
+    //if (last_read_address.? >= 0xC050 and last_read_address.? <= 0xC057) {
+    //    std.debug.print("{X}\n", .{last_read_address.?});
+    //}
     if (changed_registers[0] or last_read_address == 0xC050) { // switch to graphics mode
         pixel_screen.switchToGraphicsMode();
     } else if (changed_registers[1] or last_read_address == 0xC051) { // switch to text mode
